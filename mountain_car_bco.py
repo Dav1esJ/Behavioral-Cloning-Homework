@@ -1,3 +1,4 @@
+from itertools import permutations
 import numpy as np
 if not hasattr(np, "bool8"):
     np.bool8 = np.bool_
@@ -52,14 +53,47 @@ class InvDynamicsNetwork(nn.Module):
         #################
         #TODO:
         #################
+        self.fc1 = nn.Linear(4, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.output = nn.Linear(32, 3)
+        self.relu = nn.ReLU()
 
     def forward(self, x):
         #this method performs a forward pass through the network
         ###############
         #TODO:
         ###############
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        x = self.output(x)
         return x
     
+def train_inv(s_s2, acs, inv_dyn, learning_rate, epochs=50, batch_size=64):
+    optimizer = Adam(inv_dyn.parameters(), lr=learning_rate)
+    loss_fn = nn.CrossEntropyLoss()
+    inv_dyn.train()
+
+    N = len(s_s2)
+
+    for epoch in range(epochs):
+        perm = torch.randperm(N)
+
+        total_loss = 0.0
+
+        for i in range(0, N, batch_size):
+            idx = perm[i:i+batch_size]
+
+            states = s_s2[idx]  
+            actions = acs[idx] 
+
+            logits = inv_dyn(states)
+            loss = loss_fn(logits, actions)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
 
 
 
@@ -73,7 +107,7 @@ if __name__ == "__main__":
 
 
     #collect random interaction data
-    num_interactions = 5
+    num_interactions = 50
     s_s2, acs = collect_random_interaction_data(num_interactions)
     #put the data into tensors for feeding into torch
     s_s2_torch = torch.from_numpy(np.array(s_s2)).float().to(device)
@@ -85,8 +119,7 @@ if __name__ == "__main__":
     ##################
     #TODO: Train the inverse dyanmics model, no need to be fancy you can do it in one full batch via gradient descent if you like
     ##################
-
-
+    train_inv(s_s2_torch, a_torch, inv_dyn, learning_rate=1e-3)
 
     #collect human demos
     demos = collect_human_demos(args.num_demos)
